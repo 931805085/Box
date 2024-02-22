@@ -32,6 +32,7 @@
     <string name="det_sort">Sort</string>
     <string name="det_push">Push</string>
     <string name="det_fav">Favorite</string>
+    <string name="det_cache">Cache</string>
     <string name="det_fav_add">Added to Favorite</string>
     <string name="det_fav_del">Removed from Favorite</string>
     <string name="det_fav_star">★ Favorite</string>

@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.base;
 
 import androidx.multidex.MultiDexApplication;
+
 import com.github.catvod.crawler.JsLoader;
 import com.github.tvbox.osc.callback.EmptyCallback;
 import com.github.tvbox.osc.callback.LoadingCallback;
@@ -17,7 +18,9 @@ import com.kingja.loadsir.core.LoadSir;
 import com.orhanobut.hawk.Hawk;
 import com.p2p.P2PClass;
 import com.whl.quickjs.android.QuickJSLoader;
+
 import java.io.File;
+
 import me.jessyan.autosize.AutoSizeConfig;
 import me.jessyan.autosize.unit.Subunits;
 
@@ -31,7 +34,7 @@ public class App extends MultiDexApplication {
     private static P2PClass p;
     public static String burl;
     private static String dashData;
-    
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -87,6 +90,7 @@ public class App extends MultiDexApplication {
         Hawk.init(this).build();
         Hawk.put(HawkConfig.DEBUG_OPEN, false);
 
+        putDefault(HawkConfig.API_URL, "http://zchome.us.to:9070/vod/tvbox.json");
         // 首页选项
         putDefault(HawkConfig.HOME_SHOW_SOURCE, true);       //数据源显示: true=开启, false=关闭
         putDefault(HawkConfig.HOME_SEARCH_POSITION, false);  //按钮位置-搜索: true=上方, false=下方
@@ -135,6 +139,7 @@ public class App extends MultiDexApplication {
     public void setDashData(String data) {
         dashData = data;
     }
+
     public String getDashData() {
         return dashData;
     }

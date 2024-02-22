@@ -830,7 +830,7 @@ public class HomeActivity extends BaseActivity {
         Intent intent = new Intent(getApplicationContext(), HomeActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
         Bundle bundle = new Bundle();
-        bundle.putBoolean("useCache", true);
+        bundle.putBoolean("useCache", false);
         intent.putExtras(bundle);
         HomeActivity.this.startActivity(intent);
     }

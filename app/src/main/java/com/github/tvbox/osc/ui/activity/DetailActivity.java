@@ -30,6 +30,7 @@ import androidx.annotation.RequiresApi;
 import androidx.fragment.app.FragmentContainerView;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
+
 import com.blankj.utilcode.util.ServiceUtils;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.github.tvbox.osc.R;
@@ -48,7 +49,6 @@ import com.github.tvbox.osc.ui.adapter.SeriesFlagAdapter;
 import com.github.tvbox.osc.ui.dialog.PushDialog;
 import com.github.tvbox.osc.ui.dialog.QuickSearchDialog;
 import com.github.tvbox.osc.ui.fragment.PlayFragment;
-import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.ImgUtil;
@@ -79,7 +79,10 @@ import java.io.ObjectOutputStream;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -109,6 +112,7 @@ public class DetailActivity extends BaseActivity {
     private TextView tvPush;
     private TextView tvQuickSearch;
     private TextView tvCollect;
+    private TextView tvCache;
     private TvRecyclerView mGridViewFlag;
     private TvRecyclerView mGridView;
     private LinearLayout mEmptyPlayList;
@@ -131,7 +135,7 @@ public class DetailActivity extends BaseActivity {
     public static final int BROADCAST_ACTION_PLAYPAUSE = 1;
     public static final int BROADCAST_ACTION_NEXT = 2;
 
-    private ImageView tvPlayUrl;    
+    private ImageView tvPlayUrl;
     /**
      * Home键广播,用于触发后台服务
      */
@@ -154,23 +158,23 @@ public class DetailActivity extends BaseActivity {
         initViewModel();
         initData();
     }
-    
+
     @Override
     protected void onResume() {
         super.onResume();
         openBackgroundPlay = false;
         playServerSwitch(false);
     }
-    
+
     @Override
     protected void onPause() {
         super.onPause();
-        if (openBackgroundPlay){
+        if (openBackgroundPlay) {
             playServerSwitch(true);
         }
     }
-    
-    private void initReceiver(){
+
+    private void initReceiver() {
         // 注册广播接收器
         if (mHomeKeyReceiver == null) {
             mHomeKeyReceiver = new BroadcastReceiver() {
@@ -207,6 +211,7 @@ public class DetailActivity extends BaseActivity {
         tvSort = findViewById(R.id.tvSort);
         tvPush = findViewById(R.id.tvPush);
         tvCollect = findViewById(R.id.tvCollect);
+        tvCache = findViewById(R.id.tvCache);
         tvQuickSearch = findViewById(R.id.tvQuickSearch);
         tvPlayUrl = findViewById(R.id.tvPlayUrl);
         mEmptyPlayList = findViewById(R.id.mEmptyPlaylist);
@@ -329,6 +334,13 @@ public class DetailActivity extends BaseActivity {
                 }
             }
         });
+        tvCache.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View view) {
+                cache();
+            }
+        });
         tvPlayUrl.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -425,7 +437,7 @@ public class DetailActivity extends BaseActivity {
             @Override
             public void onClick(View v) {
                 ClipboardManager clipboard = (ClipboardManager) DetailActivity.this.getSystemService(Context.CLIPBOARD_SERVICE);
-                String cpContent = "视频ID：" + vodId + "，图片地址：" + (mVideo == null ? "" : mVideo.pic);
+                String cpContent = "影片ID：" + vodId + "，图片地址：" + (mVideo == null ? "" : mVideo.pic);
                 ClipData clipData = ClipData.newPlainText(null, cpContent);
                 clipboard.setPrimaryClip(clipData);
                 Toast.makeText(DetailActivity.this, "已复制" + cpContent, Toast.LENGTH_SHORT).show();
@@ -488,8 +500,8 @@ public class DetailActivity extends BaseActivity {
             }
             if (canSelect)
                 vodInfo.seriesMap.get(vodInfo.playFlag).get(vodInfo.playIndex).selected = true;
-        }        
-        
+        }
+
         List<VodInfo.VodSeries> list = vodInfo.seriesMap.get(vodInfo.playFlag);
         int index = 0;
         for (VodInfo.VodSeries vodSeries : list) {
@@ -763,6 +775,103 @@ public class DetailActivity extends BaseActivity {
         }
     }
 
+    static ArrayList<String> formats = new ArrayList<>();
+
+    static boolean isMedia(String name) {
+        if (formats.size() == 0) {
+            formats.add(".rmvb");
+            formats.add(".avi");
+            formats.add(".mkv");
+            formats.add(".flv");
+            formats.add(".mp4");
+            formats.add(".rm");
+            formats.add(".vob");
+            formats.add(".wmv");
+            formats.add(".mov");
+            formats.add(".3gp");
+            formats.add(".asf");
+            formats.add(".mpg");
+            formats.add(".m3u8");
+            formats.add(".mpeg");
+            formats.add(".mpe");
+        }
+        for (String f : formats) {
+            if (name.toLowerCase().endsWith(f))
+                return true;
+
+        }
+        return false;
+    }
+
+    private void cache() {
+        if (vodInfo != null && Objects.requireNonNull(vodInfo.seriesMap.get(vodInfo.playFlag)).size() > 0) {
+            if ("ZCH".equals(vodInfo.sourceKey)) {
+                Toast.makeText(DetailActivity.this, "ZCH源已是缓存源，无法缓存", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            //保存历史
+            insertVod(sourceKey, vodInfo);
+            SourceBean sourceBean = ApiConfig.get().getSource("ZCH");
+            if (sourceBean != null) {
+                Set<String> unsupportExt = new HashSet<>();
+                int pass = 0;
+                for (VodInfo.VodSeries vod : vodInfo.seriesMap.get(vodInfo.playFlag)) {
+                    String url = vod.url != null ? vod.url : "";
+                    if (isMedia(url)) {
+                        pass++;
+                    } else {
+                        int lastIndexOf = url.lastIndexOf('.');
+                        if (lastIndexOf >= 0) {
+                            unsupportExt.add(url.substring(lastIndexOf));
+                        } else {
+                            unsupportExt.add(".");
+                        }
+                    }
+                }
+                if (pass == 0) {
+                    Toast.makeText(DetailActivity.this, "当前影片不支持缓存,资源类型为 " +
+                            String.join("、", unsupportExt), Toast.LENGTH_SHORT).show();
+                    return;
+                } else if (!unsupportExt.isEmpty()) {
+                    Toast.makeText(DetailActivity.this, "当前影片部分支持缓存,不支持缓存的影片类型为 " +
+                            String.join("、", unsupportExt), Toast.LENGTH_SHORT).show();
+                }
+
+                String json = new Gson().toJson(vodInfo);
+                OkGo.<String>post(sourceBean.getApi() + "/cache")
+                        .upJson(json)
+                        .retryCount(0)
+                        .tag("cache")
+                        .execute(new AbsCallback<String>() {
+
+                            @Override
+                            public String convertResponse(okhttp3.Response response) throws Throwable {
+                                if (response.body() != null) {
+                                    return response.body().string();
+                                } else {
+                                    throw new IllegalStateException("网络请求错误");
+                                }
+                            }
+
+                            @Override
+                            public void onSuccess(Response<String> response) {
+                                Toast.makeText(DetailActivity.this, "上报缓存需求成功，稍后可以在桌面“已缓存”中观看影片", Toast.LENGTH_SHORT).show();
+                            }
+
+                            @Override
+                            public void onError(Response<String> response) {
+                                super.onError(response);
+                                Toast.makeText(DetailActivity.this, "上报缓存需求失败:" + response.body(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+            } else {
+                Toast.makeText(DetailActivity.this, "缓存需求仅支持ZCH源", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+
     private String searchTitle = "";
     private boolean hadQuickStart = false;
     private final List<Movie.Video> quickSearchData = new ArrayList<>();
@@ -837,8 +946,7 @@ public class DetailActivity extends BaseActivity {
             th.printStackTrace();
         }
         searchExecutorService = Executors.newFixedThreadPool(5);
-        List<SourceBean> searchRequestList = new ArrayList<>();
-        searchRequestList.addAll(ApiConfig.get().getSourceBeanList());
+        List<SourceBean> searchRequestList = new ArrayList<>(ApiConfig.get().getSourceBeanList());
         SourceBean home = ApiConfig.get().getHomeSourceBean();
         searchRequestList.remove(home);
         searchRequestList.add(0, home);
@@ -888,7 +996,7 @@ public class DetailActivity extends BaseActivity {
     }
 
     @Override
-    protected void onDestroy() {    	
+    protected void onDestroy() {
         super.onDestroy();
         // 注销广播接收器
         if (mHomeKeyReceiver != null) {
@@ -907,15 +1015,16 @@ public class DetailActivity extends BaseActivity {
         OkGo.getInstance().cancelTag("detail");
         OkGo.getInstance().cancelTag("quick_search");
         OkGo.getInstance().cancelTag("pushVod");
+        OkGo.getInstance().cancelTag("cache");
         EventBus.getDefault().unregister(this);
         if (!showPreview) Thunder.stop(true);
-    }    
+    }
 
     @Override
     public void onUserLeaveHint() {
         // takagen99 : Additional check for external player
-        if (supportsPiPMode() && showPreview && !playFragment.extPlay && Hawk.get(HawkConfig.BACKGROUND_PLAY_TYPE, 0) == 2 ) {
-        	// 创建一个Intent对象，模拟按下Home键
+        if (supportsPiPMode() && showPreview && !playFragment.extPlay && Hawk.get(HawkConfig.BACKGROUND_PLAY_TYPE, 0) == 2) {
+            // 创建一个Intent对象，模拟按下Home键
             Intent intent = new Intent(Intent.ACTION_MAIN);
             intent.addCategory(Intent.CATEGORY_HOME);
             startActivity(intent);
@@ -939,16 +1048,16 @@ public class DetailActivity extends BaseActivity {
                     .setAspectRatio(ratio)
                     .setActions(actions).build();
             if (!fullWindows) {
-                    toggleFullPreview();
-                }
+                toggleFullPreview();
+            }
             enterPictureInPictureMode(params);
             playFragment.getVodController().hideBottom();
             playFragment.getPlayer().postDelayed(() -> {
-                if (!playFragment.getPlayer().isPlaying()){
+                if (!playFragment.getPlayer().isPlaying()) {
                     playFragment.getVodController().togglePlay();
                 }
-            },400);
-        }        
+            }, 400);
+        }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -958,16 +1067,17 @@ public class DetailActivity extends BaseActivity {
                         DetailActivity.this,
                         actionCode,
                         new Intent(BROADCAST_ACTION).putExtra("action", actionCode),
-                        0);
+                        PendingIntent.FLAG_IMMUTABLE);
         final Icon icon = Icon.createWithResource(DetailActivity.this, iconResId);
         return (new RemoteAction(icon, title, desc, intent));
     }
 
     /**
      * 事件接收广播(画中画/后台播放点击事件)
+     *
      * @param isRegister 注册/注销
      */
-    private void registerActionReceiver(boolean isRegister){
+    private void registerActionReceiver(boolean isRegister) {
         if (isRegister) {
             pipActionReceiver = new BroadcastReceiver() {
 
@@ -977,7 +1087,7 @@ public class DetailActivity extends BaseActivity {
                         return;
                     }
 
-                    int currentStatus = intent.getIntExtra("action", 1);                    
+                    int currentStatus = intent.getIntExtra("action", 1);
                     if (currentStatus == BROADCAST_ACTION_PREV) {
                         playFragment.playPrevious();
                     } else if (currentStatus == BROADCAST_ACTION_PLAYPAUSE) {
@@ -990,32 +1100,32 @@ public class DetailActivity extends BaseActivity {
             registerReceiver(pipActionReceiver, new IntentFilter(BROADCAST_ACTION));
 
         } else {
-            if (pipActionReceiver!=null){
+            if (pipActionReceiver != null) {
                 unregisterReceiver(pipActionReceiver);
                 pipActionReceiver = null;
             }
-            if (playFragment.getPlayer().isPlaying()){
+            if (playFragment.getPlayer().isPlaying()) {
                 playFragment.getVodController().togglePlay();
             }
         }
     }
-    
+
     @Override
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
         registerActionReceiver(supportsPiPMode() && isInPictureInPictureMode);
     }
-    
+
     /**
      * 后台播放服务开关,开启时注册操作广播,关闭时注销
      */
-    private void playServerSwitch(boolean open){
-        if (open){
+    private void playServerSwitch(boolean open) {
+        if (open) {
             VodInfo.VodSeries vod = vodInfo.seriesMap.get(vodInfo.playFlag).get(vodInfo.playIndex);
-            PlayService.start(playFragment.getPlayer(),vodInfo.name+"&&"+vod.name);
+            PlayService.start(playFragment.getPlayer(), vodInfo.name + "&&" + vod.name);
             registerActionReceiver(true);
-        }else {
-            if (ServiceUtils.isServiceRunning(PlayService.class)){
+        } else {
+            if (ServiceUtils.isServiceRunning(PlayService.class)) {
                 PlayService.stop();
                 registerActionReceiver(false);
             }

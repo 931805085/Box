@@ -32,6 +32,7 @@
     <string name="det_sort">倒序</string>
     <string name="det_push">推送</string>
     <string name="det_fav">收藏</string>
+    <string name="det_cache">缓存</string>
     <string name="det_fav_add">已添加收藏</string>
     <string name="det_fav_del">已取消收藏</string>
     <string name="det_fav_star">★ 收藏</string>
