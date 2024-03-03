@@ -60,6 +60,7 @@ import com.github.tvbox.osc.util.StringUtils;
 import com.github.tvbox.osc.util.SubtitleHelper;
 import com.github.tvbox.osc.util.thunder.Thunder;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -434,8 +435,9 @@ public class DetailActivity extends BaseActivity {
                 ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                 //设置内容到剪切板
 //                cm.setPrimaryClip(ClipData.newPlainText(null, vodInfo.seriesMap.get(vodInfo.playFlag).get(0).url));
-                cm.setPrimaryClip(ClipData.newPlainText(null, vodInfo.seriesMap.get(vodInfo.playFlag).get(vodInfo.playIndex).url));
-                Toast.makeText(DetailActivity.this, getString(R.string.det_url), Toast.LENGTH_SHORT).show();
+                String url = vodInfo.seriesMap.get(vodInfo.playFlag).get(vodInfo.playIndex).url;
+                cm.setPrimaryClip(ClipData.newPlainText(null, url));
+                Toast.makeText(DetailActivity.this, getString(R.string.det_url) + ": " + url, Toast.LENGTH_SHORT).show();
             }
         });
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
@@ -713,7 +715,7 @@ public class DetailActivity extends BaseActivity {
         } catch (Exception e) {
         }
         return arrayList;
-    }  
+    }
 
     private void setTextShow(TextView view, String tag, String info) {
         if (info == null || info.trim().isEmpty()) {
@@ -1011,30 +1013,6 @@ public class DetailActivity extends BaseActivity {
             insertVod(sourceKey, vodInfo);
             SourceBean sourceBean = ApiConfig.get().getSource("ZCH");
             if (sourceBean != null) {
-                Set<String> unsupportExt = new HashSet<>();
-                int pass = 0;
-                for (VodInfo.VodSeries vod : vodInfo.seriesMap.get(vodInfo.playFlag)) {
-                    String url = vod.url != null ? vod.url : "";
-                    if (isMedia(url)) {
-                        pass++;
-                    } else {
-                        int lastIndexOf = url.lastIndexOf('.');
-                        if (lastIndexOf >= 0) {
-                            unsupportExt.add(url.substring(lastIndexOf));
-                        } else {
-                            unsupportExt.add(".");
-                        }
-                    }
-                }
-                if (pass == 0) {
-                    Toast.makeText(DetailActivity.this, "当前影片不支持缓存,资源类型为 " +
-                            String.join("、", unsupportExt), Toast.LENGTH_SHORT).show();
-                    return;
-                } else if (!unsupportExt.isEmpty()) {
-                    Toast.makeText(DetailActivity.this, "当前影片部分支持缓存,不支持缓存的影片类型为 " +
-                            String.join("、", unsupportExt), Toast.LENGTH_SHORT).show();
-                }
-
                 String json = new Gson().toJson(vodInfo);
                 OkGo.<String>post(sourceBean.getApi() + "/cache")
                         .upJson(json)
@@ -1067,13 +1045,6 @@ public class DetailActivity extends BaseActivity {
             }
         }
     }
-
-
-    private String searchTitle = "";
-    private boolean hadQuickStart = false;
-    private final List<Movie.Video> quickSearchData = new ArrayList<>();
-    private final List<String> quickSearchWord = new ArrayList<>();
-    private ExecutorService searchExecutorService = null;
 
     private void switchSearchWord(String word) {
         OkGo.getInstance().cancelTag("quick_search");
